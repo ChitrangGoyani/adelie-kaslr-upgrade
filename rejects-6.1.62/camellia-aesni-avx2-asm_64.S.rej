@@ -1,0 +1,63 @@
+--- arch/x86/crypto/camellia-aesni-avx2-asm_64.S
++++ arch/x86/crypto/camellia-aesni-avx2-asm_64.S
+@@ -1108,7 +1108,7 @@ ENTRY(camellia_ctr_32way)
+ 	vmovdqu (%rcx), %xmm0;
+ 	vmovdqa %xmm0, %xmm1;
+ 	inc_le128(%xmm0, %xmm15, %xmm14);
+-	vbroadcasti128 .Lbswap128_mask, %ymm14;
++	vbroadcasti128 .Lbswap128_mask(%rip), %ymm14;
+ 	vinserti128 $1, %xmm0, %ymm1, %ymm0;
+ 	vpshufb %ymm14, %ymm0, %ymm13;
+ 	vmovdqu %ymm13, 15 * 32(%rax);
+@@ -1154,7 +1154,7 @@ ENTRY(camellia_ctr_32way)
+ 
+ 	/* inpack32_pre: */
+ 	vpbroadcastq (key_table)(CTX), %ymm15;
+-	vpshufb .Lpack_bswap, %ymm15, %ymm15;
++	vpshufb .Lpack_bswap(%rip), %ymm15, %ymm15;
+ 	vpxor %ymm0, %ymm15, %ymm0;
+ 	vpxor %ymm1, %ymm15, %ymm1;
+ 	vpxor %ymm2, %ymm15, %ymm2;
+@@ -1238,13 +1238,13 @@ camellia_xts_crypt_32way:
+ 	subq $(16 * 32), %rsp;
+ 	movq %rsp, %rax;
+ 
+-	vbroadcasti128 .Lxts_gf128mul_and_shl1_mask_0, %ymm12;
++	vbroadcasti128 .Lxts_gf128mul_and_shl1_mask_0(%rip), %ymm12;
+ 
+ 	/* load IV and construct second IV */
+ 	vmovdqu (%rcx), %xmm0;
+ 	vmovdqa %xmm0, %xmm15;
+ 	gf128mul_x_ble(%xmm0, %xmm12, %xmm13);
+-	vbroadcasti128 .Lxts_gf128mul_and_shl1_mask_1, %ymm13;
++	vbroadcasti128 .Lxts_gf128mul_and_shl1_mask_1(%rip), %ymm13;
+ 	vinserti128 $1, %xmm0, %ymm15, %ymm0;
+ 	vpxor 0 * 32(%rdx), %ymm0, %ymm15;
+ 	vmovdqu %ymm15, 15 * 32(%rax);
+@@ -1321,7 +1321,7 @@ camellia_xts_crypt_32way:
+ 
+ 	/* inpack32_pre: */
+ 	vpbroadcastq (key_table)(CTX, %r8, 8), %ymm15;
+-	vpshufb .Lpack_bswap, %ymm15, %ymm15;
++	vpshufb .Lpack_bswap(%rip), %ymm15, %ymm15;
+ 	vpxor 0 * 32(%rax), %ymm15, %ymm0;
+ 	vpxor %ymm1, %ymm15, %ymm1;
+ 	vpxor %ymm2, %ymm15, %ymm2;
+@@ -1379,7 +1379,7 @@ ENTRY(camellia_xts_enc_32way)
+ 
+ 	xorl %r8d, %r8d; /* input whitening key, 0 for enc */
+ 
+-	leaq __camellia_enc_blk32, %r9;
++	leaq __camellia_enc_blk32(%rip), %r9;
+ 
+ 	jmp camellia_xts_crypt_32way;
+ ENDPROC(camellia_xts_enc_32way)
+@@ -1397,7 +1397,7 @@ ENTRY(camellia_xts_dec_32way)
+ 	movl $24, %eax;
+ 	cmovel %eax, %r8d;  /* input whitening key, last for dec */
+ 
+-	leaq __camellia_dec_blk32, %r9;
++	leaq __camellia_dec_blk32(%rip), %r9;
+ 
+ 	jmp camellia_xts_crypt_32way;
+ ENDPROC(camellia_xts_dec_32way)

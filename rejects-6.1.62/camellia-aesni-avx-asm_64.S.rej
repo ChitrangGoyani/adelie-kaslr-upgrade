@@ -1,0 +1,56 @@
+--- arch/x86/crypto/camellia-aesni-avx-asm_64.S
++++ arch/x86/crypto/camellia-aesni-avx-asm_64.S
+@@ -1017,7 +1017,7 @@ ENTRY(camellia_ctr_16way)
+ 	subq $(16 * 16), %rsp;
+ 	movq %rsp, %rax;
+ 
+-	vmovdqa .Lbswap128_mask, %xmm14;
++	vmovdqa .Lbswap128_mask(%rip), %xmm14;
+ 
+ 	/* load IV and byteswap */
+ 	vmovdqu (%rcx), %xmm0;
+@@ -1066,7 +1066,7 @@ ENTRY(camellia_ctr_16way)
+ 
+ 	/* inpack16_pre: */
+ 	vmovq (key_table)(CTX), %xmm15;
+-	vpshufb .Lpack_bswap, %xmm15, %xmm15;
++	vpshufb .Lpack_bswap(%rip), %xmm15, %xmm15;
+ 	vpxor %xmm0, %xmm15, %xmm0;
+ 	vpxor %xmm1, %xmm15, %xmm1;
+ 	vpxor %xmm2, %xmm15, %xmm2;
+@@ -1134,7 +1134,7 @@ camellia_xts_crypt_16way:
+ 	subq $(16 * 16), %rsp;
+ 	movq %rsp, %rax;
+ 
+-	vmovdqa .Lxts_gf128mul_and_shl1_mask, %xmm14;
++	vmovdqa .Lxts_gf128mul_and_shl1_mask(%rip), %xmm14;
+ 
+ 	/* load IV */
+ 	vmovdqu (%rcx), %xmm0;
+@@ -1210,7 +1210,7 @@ camellia_xts_crypt_16way:
+ 
+ 	/* inpack16_pre: */
+ 	vmovq (key_table)(CTX, %r8, 8), %xmm15;
+-	vpshufb .Lpack_bswap, %xmm15, %xmm15;
++	vpshufb .Lpack_bswap(%rip), %xmm15, %xmm15;
+ 	vpxor 0 * 16(%rax), %xmm15, %xmm0;
+ 	vpxor %xmm1, %xmm15, %xmm1;
+ 	vpxor %xmm2, %xmm15, %xmm2;
+@@ -1265,7 +1265,7 @@ ENTRY(camellia_xts_enc_16way)
+ 	 */
+ 	xorl %r8d, %r8d; /* input whitening key, 0 for enc */
+ 
+-	leaq __camellia_enc_blk16, %r9;
++	leaq __camellia_enc_blk16(%rip), %r9;
+ 
+ 	jmp camellia_xts_crypt_16way;
+ ENDPROC(camellia_xts_enc_16way)
+@@ -1283,7 +1283,7 @@ ENTRY(camellia_xts_dec_16way)
+ 	movl $24, %eax;
+ 	cmovel %eax, %r8d;  /* input whitening key, last for dec */
+ 
+-	leaq __camellia_dec_blk16, %r9;
++	leaq __camellia_dec_blk16(%rip), %r9;
+ 
+ 	jmp camellia_xts_crypt_16way;
+ ENDPROC(camellia_xts_dec_16way)

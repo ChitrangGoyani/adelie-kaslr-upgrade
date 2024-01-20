@@ -1,0 +1,11 @@
+--- arch/x86/crypto/ghash-clmulni-intel_asm.S
++++ arch/x86/crypto/ghash-clmulni-intel_asm.S
+@@ -94,7 +94,7 @@ ENTRY(clmul_ghash_mul)
+ 	FRAME_BEGIN
+ 	movups (%rdi), DATA
+ 	movups (%rsi), SHASH
+-	movaps .Lbswap_mask, BSWAP
++	movaps .Lbswap_mask(%rip), BSWAP
+ 	PSHUFB_XMM BSWAP DATA
+ 	call __clmul_gf128mul_ble
+ 	PSHUFB_XMM BSWAP DATA

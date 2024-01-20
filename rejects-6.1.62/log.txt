@@ -1,0 +1,61 @@
+patching file arch/x86/crypto/aegis128-aesni-asm.S
+Hunk #1 succeeded at 201 (offset 1 line).
+Hunk #2 succeeded at 682 (offset 1 line).
+patching file arch/x86/crypto/aesni-intel_asm.S
+Hunk #1 FAILED at 2606.
+Hunk #2 FAILED at 2734.
+2 out of 2 hunks FAILED -- saving rejects to file arch/x86/crypto/aesni-intel_asm.S.rej
+patching file arch/x86/crypto/aesni-intel_avx-x86_64.S
+Hunk #1 succeeded at 649 (offset -11 lines).
+patching file arch/x86/crypto/camellia-aesni-avx-asm_64.S
+Hunk #1 succeeded at 52 (offset -1 lines).
+Hunk #2 succeeded at 68 (offset -1 lines).
+Hunk #3 succeeded at 83 (offset -1 lines).
+Hunk #4 succeeded at 95 (offset -1 lines).
+Hunk #5 succeeded at 443 (offset -1 lines).
+Hunk #6 succeeded at 482 (offset -1 lines).
+Hunk #7 succeeded at 533 (offset -1 lines).
+Hunk #8 FAILED at 1017.
+Hunk #9 FAILED at 1066.
+Hunk #10 FAILED at 1134.
+Hunk #11 FAILED at 1210.
+Hunk #12 FAILED at 1265.
+Hunk #13 FAILED at 1283.
+6 out of 13 hunks FAILED -- saving rejects to file arch/x86/crypto/camellia-aesni-avx-asm_64.S.rej
+patching file arch/x86/crypto/camellia-aesni-avx2-asm_64.S
+Hunk #1 succeeded at 64 (offset -1 lines).
+Hunk #2 succeeded at 115 (offset -1 lines).
+Hunk #3 succeeded at 131 (offset -1 lines).
+Hunk #4 succeeded at 477 (offset -1 lines).
+Hunk #5 succeeded at 516 (offset -1 lines).
+Hunk #6 succeeded at 567 (offset -1 lines).
+Hunk #7 FAILED at 1108.
+Hunk #8 FAILED at 1154.
+Hunk #9 FAILED at 1238.
+Hunk #10 FAILED at 1321.
+Hunk #11 FAILED at 1379.
+Hunk #12 FAILED at 1397.
+6 out of 12 hunks FAILED -- saving rejects to file arch/x86/crypto/camellia-aesni-avx2-asm_64.S.rej
+patching file arch/x86/crypto/camellia-x86_64-asm_64.S
+patching file arch/x86/crypto/cast5-avx-x86_64-asm_64.S
+patching file arch/x86/crypto/cast6-avx-x86_64-asm_64.S
+Hunk #3 succeeded at 262 (offset -2 lines).
+Hunk #4 succeeded at 288 (offset -2 lines).
+Hunk #5 succeeded at 310 (offset -2 lines).
+Hunk #6 succeeded at 336 (offset -2 lines).
+patching file arch/x86/crypto/des3_ede-asm_64.S
+patching file arch/x86/crypto/ghash-clmulni-intel_asm.S
+Hunk #1 FAILED at 94.
+Hunk #2 succeeded at 110 with fuzz 1 (offset -1 lines).
+1 out of 2 hunks FAILED -- saving rejects to file arch/x86/crypto/ghash-clmulni-intel_asm.S.rej
+patching file arch/x86/crypto/glue_helper-asm-avx.S
+Hunk #1 FAILED at 44.
+Hunk #2 FAILED at 89.
+2 out of 2 hunks FAILED -- saving rejects to file arch/x86/crypto/glue_helper-asm-avx.S.rej
+patching file arch/x86/crypto/glue_helper-asm-avx2.S
+Hunk #1 FAILED at 62.
+Hunk #2 FAILED at 119.
+2 out of 2 hunks FAILED -- saving rejects to file arch/x86/crypto/glue_helper-asm-avx2.S.rej
+patching file arch/x86/crypto/sha256-avx2-asm.S
+Hunk #1 succeeded at 590 (offset -2 lines).
+Hunk #2 succeeded at 616 (offset -2 lines).
