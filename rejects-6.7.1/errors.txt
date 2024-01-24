@@ -1,0 +1,28 @@
+aegis128-aesni-asm.S - applied
+aesni-intel_asm.S - line not found
+aesni-intel_avx-x86_64.S - changes in func: line 622 - 635
+
+	.L_get_AAD_rest0\@:
+		/* finalize: shift out the extra bytes we read, and align
+		left. since pslldq can only shift by an immediate, we use
+		vpshufb and a pair of shuffle masks */
+		leaq	ALL_F(%rip), %r11
+		subq	%r12, %r11
+		vmovdqu	16(%r11), \T1
+		andq	$~3, %r11
+		vpshufb (%r11), \T7, \T7
+		vpand	\T1, \T7, \T7
+	.L_get_AAD_rest_final\@:
+		vpshufb SHUF_MASK(%rip), \T7, \T7
+		vpxor   \T8, \T7, \T7
+		\GHASH_MUL       \T7, \T2, \T1, \T3, \T4, \T5, \T6
+		
+camellia-aesni-avx2-asm_64 - (camellia_ctr_32way) onwards missing
+camellia-aesni-avx-asm_64 - (camellia_ctr_16way) onwards missing
+camellia-x86_64-asm_64 - one line interchange (mostly the two lines dont affect each other so shouldnt matter)
+cast5-avx-x86_64-asm_64 - 2 to 3 lines interchange, maybe already applied
+cast6-avx-x86_64-asm_64.S - same as above
+ghash-clmulni-intel_asm.S - applied
+glue_helper-asm-avx.S - file changed completely
+glue_helper-asm-avx2.S - file changed completely
+sha256-avx2-asm.S - both functions changed but not drastically, fixable
