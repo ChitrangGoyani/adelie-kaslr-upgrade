@@ -5,7 +5,7 @@
  		"mov %%cs, %0\n\t"
  		"pushq %q0\n\t"
 -		"pushq $1f\n\t"
-+		"leaq $1f(%%rip), %q0\n\t"
++		"leaq 1f(%%rip), %q0\n\t"
 +		"pushq %q0\n\t"
  		"iretq\n\t"
  		"1:"
