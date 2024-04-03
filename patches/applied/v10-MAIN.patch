@@ -1,0 +1,265 @@
+diff -ur a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
+--- a/arch/x86/entry/entry_64.S	2024-04-03 17:41:36.067454568 -0400
++++ b/arch/x86/entry/entry_64.S	2024-04-03 09:32:51.000000000 -0400
+@@ -1039,8 +1039,7 @@
+ 	movl	%ecx, %eax			/* zero extend */
+ 	cmpq	%rax, RIP+8(%rsp)
+ 	je	.Lbstep_iret
+-	leaq	.Lgs_change(%rip), %rcx
+-	cmpq	%rcx, RIP+8(%rsp)
++	cmpq	$.Lgs_change, RIP+8(%rsp)
+ 	jne	.Lerror_entry_done_lfence
+ 
+ 	/*
+@@ -1252,10 +1251,10 @@
+ 	 * the outer NMI.
+ 	 */
+ 
+-	leaq	repeat_nmi(%rip), %rdx
++	movq	$repeat_nmi, %rdx
+ 	cmpq	8(%rsp), %rdx
+ 	ja	1f
+-	leaq	end_repeat_nmi(%rip), %rdx
++	movq	$end_repeat_nmi, %rdx
+ 	cmpq	8(%rsp), %rdx
+ 	ja	nested_nmi_out
+ 1:
+@@ -1309,8 +1308,7 @@
+ 	pushq	%rdx
+ 	pushfq
+ 	pushq	$__KERNEL_CS
+-	leaq	repeat_nmi(%rip), %rdx
+-	pushq	%rdx
++	pushq	$repeat_nmi
+ 
+ 	/* Put stack back */
+ 	addq	$(6*8), %rsp
+@@ -1349,11 +1347,7 @@
+ 	addq	$8, (%rsp)	/* Fix up RSP */
+ 	pushfq			/* RFLAGS */
+ 	pushq	$__KERNEL_CS	/* CS */
+-	pushq	$0		/* Future return address */
+-	pushq	%rdx		/* Save RAX */
+-	leaq	1f(%rip), %rdx	/* RIP */
+-	movq    %rdx, 8(%rsp)   /* Put 1f on return address */
+-	popq	%rdx		/* Restore RAX */
++	pushq	$1f		/* RIP */
+ 	iretq			/* continues at repeat_nmi below */
+ 	UNWIND_HINT_IRET_REGS
+ 1:
+Only in a/arch/x86/entry: entry_64.S.orig
+diff -ur a/arch/x86/include/asm/alternative.h b/arch/x86/include/asm/alternative.h
+--- a/arch/x86/include/asm/alternative.h	2024-04-03 17:42:15.555864934 -0400
++++ b/arch/x86/include/asm/alternative.h	2024-04-03 09:32:51.000000000 -0400
+@@ -308,7 +308,7 @@
+ /* Like alternative_io, but for replacing a direct call with another one. */
+ #define alternative_call(oldfunc, newfunc, ft_flags, output, input...)	\
+ 	asm_inline volatile (ALTERNATIVE("call %P[old]", "call %P[new]", ft_flags) \
+-		: output : [old] "X" (oldfunc), [new] "X" (newfunc), ## input)
++		: output : [old] "i" (oldfunc), [new] "i" (newfunc), ## input)
+ 
+ /*
+  * Like alternative_call, but there are two features and respective functions.
+@@ -321,8 +321,8 @@
+ 	asm_inline volatile (ALTERNATIVE_2("call %P[old]", "call %P[new1]", ft_flags1,\
+ 		"call %P[new2]", ft_flags2)				      \
+ 		: output, ASM_CALL_CONSTRAINT				      \
+-		: [old] "X" (oldfunc), [new1] "X" (newfunc1),		      \
+-		  [new2] "X" (newfunc2), ## input)
++		: [old] "i" (oldfunc), [new1] "i" (newfunc1),		      \
++		  [new2] "i" (newfunc2), ## input)
+ 
+ /*
+  * use this macro(s) if you need more than one output parameter
+Only in a/arch/x86/include/asm: alternative.h.orig
+diff -ur a/arch/x86/include/asm/asm.h b/arch/x86/include/asm/asm.h
+--- a/arch/x86/include/asm/asm.h	2024-04-03 17:41:23.447314905 -0400
++++ b/arch/x86/include/asm/asm.h	2024-04-03 09:32:51.000000000 -0400
+@@ -35,7 +35,6 @@
+ #define _ASM_ALIGN	__ASM_SEL(.balign 4, .balign 8)
+ 
+ #define _ASM_MOV	__ASM_SIZE(mov)
+-#define _ASM_MOVABS	__ASM_SEL(movl, movabsq)
+ #define _ASM_INC	__ASM_SIZE(inc)
+ #define _ASM_DEC	__ASM_SIZE(dec)
+ #define _ASM_ADD	__ASM_SIZE(add)
+Only in a/arch/x86/include/asm: asm.h.orig
+diff -ur a/arch/x86/include/asm/pm-trace.h b/arch/x86/include/asm/pm-trace.h
+--- a/arch/x86/include/asm/pm-trace.h	2024-04-03 17:41:42.163520483 -0400
++++ b/arch/x86/include/asm/pm-trace.h	2024-04-03 09:32:51.000000000 -0400
+@@ -8,7 +8,7 @@
+ do {								\
+ 	if (pm_trace_enabled) {					\
+ 		const void *tracedata;				\
+-		asm volatile(_ASM_MOVABS " $1f,%0\n"		\
++		asm volatile(_ASM_MOV " $1f,%0\n"		\
+ 			     ".section .tracedata,\"a\"\n"	\
+ 			     "1:\t.word %c1\n\t"		\
+ 			     _ASM_PTR " %c2\n"			\
+diff -ur a/arch/x86/include/asm/sync_core.h b/arch/x86/include/asm/sync_core.h
+--- a/arch/x86/include/asm/sync_core.h	2024-04-03 17:41:49.527598820 -0400
++++ b/arch/x86/include/asm/sync_core.h	2024-04-03 09:32:51.000000000 -0400
+@@ -31,8 +31,7 @@
+ 		"pushfq\n\t"
+ 		"mov %%cs, %0\n\t"
+ 		"pushq %q0\n\t"
+-		"leaq 1f(%%rip), %q0\n\t"
+-		"pushq %q0\n\t"
++		"pushq $1f\n\t"
+ 		"iretq\n\t"
+ 		"1:"
+ 		: "=&r" (tmp), ASM_CALL_CONSTRAINT : : "cc", "memory");
+diff -ur a/arch/x86/kernel/acpi/wakeup_64.S b/arch/x86/kernel/acpi/wakeup_64.S
+--- a/arch/x86/kernel/acpi/wakeup_64.S	2024-04-03 17:41:54.547651431 -0400
++++ b/arch/x86/kernel/acpi/wakeup_64.S	2024-04-03 09:32:51.000000000 -0400
+@@ -17,7 +17,7 @@
+ 	 * Hooray, we are in Long 64-bit mode (but still running in low memory)
+ 	 */
+ SYM_FUNC_START(wakeup_long64)
+-	movq	saved_magic(%rip), %rax
++	movq	saved_magic, %rax
+ 	movq	$0x123456789abcdef0, %rdx
+ 	cmpq	%rdx, %rax
+ 	je	2f
+@@ -33,14 +33,14 @@
+ 	movw	%ax, %es
+ 	movw	%ax, %fs
+ 	movw	%ax, %gs
+-	movq	saved_rsp(%rip), %rsp
++	movq	saved_rsp, %rsp
+ 
+-	movq	saved_rbx(%rip), %rbx
+-	movq	saved_rdi(%rip), %rdi
+-	movq	saved_rsi(%rip), %rsi
+-	movq	saved_rbp(%rip), %rbp
++	movq	saved_rbx, %rbx
++	movq	saved_rdi, %rdi
++	movq	saved_rsi, %rsi
++	movq	saved_rbp, %rbp
+ 
+-	movq	saved_rip(%rip), %rax
++	movq	saved_rip, %rax
+ 	ANNOTATE_RETPOLINE_SAFE
+ 	jmp	*%rax
+ SYM_FUNC_END(wakeup_long64)
+@@ -51,7 +51,7 @@
+ 	xorl	%eax, %eax
+ 	call	save_processor_state
+ 
+-	leaq	saved_context(%rip), %rax
++	movq	$saved_context, %rax
+ 	movq	%rsp, pt_regs_sp(%rax)
+ 	movq	%rbp, pt_regs_bp(%rax)
+ 	movq	%rsi, pt_regs_si(%rax)
+@@ -70,14 +70,13 @@
+ 	pushfq
+ 	popq	pt_regs_flags(%rax)
+ 
+-	leaq	.Lresume_point(%rip), %rax
+-	movq	%rax, saved_rip(%rip)
++	movq	$.Lresume_point, saved_rip(%rip)
+ 
+-	movq	%rsp, saved_rsp(%rip)
+-	movq	%rbp, saved_rbp(%rip)
+-	movq	%rbx, saved_rbx(%rip)
+-	movq	%rdi, saved_rdi(%rip)
+-	movq	%rsi, saved_rsi(%rip)
++	movq	%rsp, saved_rsp
++	movq	%rbp, saved_rbp
++	movq	%rbx, saved_rbx
++	movq	%rdi, saved_rdi
++	movq	%rsi, saved_rsi
+ 
+ 	addq	$8, %rsp
+ 	movl	$3, %edi
+@@ -89,7 +88,7 @@
+ 	.align 4
+ .Lresume_point:
+ 	/* We don't restore %rax, it must be 0 anyway */
+-	leaq	saved_context(%rip), %rax
++	movq	$saved_context, %rax
+ 	movq	saved_context_cr4(%rax), %rbx
+ 	movq	%rbx, %cr4
+ 	movq	saved_context_cr3(%rax), %rbx
+diff -ur a/arch/x86/kernel/head_64.S b/arch/x86/kernel/head_64.S
+--- a/arch/x86/kernel/head_64.S	2024-04-03 17:41:59.635704120 -0400
++++ b/arch/x86/kernel/head_64.S	2024-04-03 09:32:51.000000000 -0400
+@@ -114,8 +114,6 @@
+ 
+ 	/* Form the CR3 value being sure to include the CR3 modifier */
+ 	addq	$(early_top_pgt - __START_KERNEL_map), %rax
+-	movabs  $(early_top_pgt - __START_KERNEL_map), %rcx
+-	addq    %rcx, %rax
+ 
+ #ifdef CONFIG_AMD_MEM_ENCRYPT
+ 	mov	%rax, %rdi
+@@ -186,8 +184,7 @@
+ #endif
+ 
+ 	/* Form the CR3 value being sure to include the CR3 modifier */
+-	movabs	$(init_top_pgt - __START_KERNEL_map), %rcx
+-	addq    %rcx, %rax
++	addq	$(init_top_pgt - __START_KERNEL_map), %rax
+ 1:
+ 
+ #ifdef CONFIG_X86_MCE
+@@ -238,7 +235,7 @@
+ 	movq	%rax, %cr4
+ 
+ 	/* Ensure I am executing from virtual addresses */
+-	movabs  $1f, %rax
++	movq	$1f, %rax
+ 	ANNOTATE_RETPOLINE_SAFE
+ 	jmp	*%rax
+ 1:
+@@ -456,12 +453,11 @@
+ 	 *	REX.W + FF /5 JMP m16:64 Jump far, absolute indirect,
+ 	 *		address given in m16:64.
+ 	 */
+-	movabs  $.Lafter_lret, %rax
+-	pushq	%rax		# put return address on stack for unwinder
++	pushq	$.Lafter_lret	# put return address on stack for unwinder
+ 	xorl	%ebp, %ebp	# clear frame pointer
+-	leaq	initial_code(%rip), %rax
++	movq	initial_code(%rip), %rax
+ 	pushq	$__KERNEL_CS	# set correct cs
+-	pushq	(%rax)		# target address in negative space
++	pushq	%rax		# target address in negative space
+ 	lretq
+ .Lafter_lret:
+ 	ANNOTATE_NOENDBR
+Only in a/arch/x86/kernel: head_64.S.orig
+diff -ur a/arch/x86/kernel/relocate_kernel_64.S b/arch/x86/kernel/relocate_kernel_64.S
+--- a/arch/x86/kernel/relocate_kernel_64.S	2024-04-03 17:41:30.243390654 -0400
++++ b/arch/x86/kernel/relocate_kernel_64.S	2024-04-03 09:32:51.000000000 -0400
+@@ -223,7 +223,7 @@
+ 	movq	%rax, %cr3
+ 	lea	PAGE_SIZE(%r8), %rsp
+ 	call	swap_pages
+-	movabsq	$virtual_mapped, %rax
++	movq	$virtual_mapped, %rax
+ 	pushq	%rax
+ 	ANNOTATE_UNRET_SAFE
+ 	ret
+Only in a/arch/x86/kernel: relocate_kernel_64.S.orig
+diff -ur a/arch/x86/power/hibernate_asm_64.S b/arch/x86/power/hibernate_asm_64.S
+--- a/arch/x86/power/hibernate_asm_64.S	2024-04-03 17:42:08.803797458 -0400
++++ b/arch/x86/power/hibernate_asm_64.S	2024-04-03 09:32:51.000000000 -0400
+@@ -39,7 +39,7 @@
+ 	movq	%rax, %cr4;  # turn PGE back on
+ 
+ 	/* We don't restore %rax, it must be 0 anyway */
+-	leaq	saved_context(%rip), %rax
++	movq	$saved_context, %rax
+ 	movq	pt_regs_sp(%rax), %rsp
+ 	movq	pt_regs_bp(%rax), %rbp
+ 	movq	pt_regs_si(%rax), %rsi
+@@ -70,7 +70,7 @@
+ SYM_FUNC_END(restore_registers)
+ 
+ SYM_FUNC_START(swsusp_arch_suspend)
+-	leaq	saved_context(%rip), %rax
++	movq	$saved_context, %rax
+ 	movq	%rsp, pt_regs_sp(%rax)
+ 	movq	%rbp, pt_regs_bp(%rax)
+ 	movq	%rsi, pt_regs_si(%rax)
