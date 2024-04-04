@@ -1,0 +1,201 @@
+diff -Naru a/arch/x86/tools/relocs.c b/arch/x86/tools/relocs.c
+--- a/arch/x86/tools/relocs.c	2024-04-03 17:29:02.560034740 -0400
++++ b/arch/x86/tools/relocs.c	2024-04-03 20:28:13.626724374 -0400
+@@ -19,8 +19,14 @@
+ 
+ static int sym_index(Elf_Sym *sym);
+ 
++#if ELF_BITS == 64
++typedef uint64_t rel_off_t;
++#else
++typedef uint32_t rel_off_t;
++#endif
++
+ struct relocs {
+-	uint32_t	*offset;
++	rel_off_t	*offset;
+ 	unsigned long	count;
+ 	unsigned long	size;
+ };
+@@ -711,7 +717,7 @@
+ 		printf("\n");
+ }
+ 
+-static void add_reloc(struct relocs *r, uint32_t offset)
++static void add_reloc(struct relocs *r, rel_off_t offset)
+ {
+ 	if (r->count == r->size) {
+ 		unsigned long newsize = r->size + 50000;
+@@ -1045,7 +1051,7 @@
+ 
+ static int cmp_relocs(const void *va, const void *vb)
+ {
+-	const uint32_t *a, *b;
++	const rel_off_t *a, *b;
+ 	a = va; b = vb;
+ 	return (*a == *b)? 0 : (*a > *b)? 1 : -1;
+ }
+@@ -1055,26 +1061,47 @@
+ 	qsort(r->offset, r->count, sizeof(r->offset[0]), cmp_relocs);
+ }
+ 
+-static int write32(uint32_t v, FILE *f)
++static int write32(rel_off_t rel, FILE *f)
+ {
+-	unsigned char buf[4];
++	unsigned char buf[sizeof(uint32_t)];
++	uint32_t v = (uint32_t) rel;
+ 
+ 	put_unaligned_le32(v, buf);
+-	return fwrite(buf, 1, 4, f) == 4 ? 0 : -1;
++	return fwrite(buf, 1, sizeof(buf), f) == sizeof(buf) ? 0 : -1;
+ }
+ 
+-static int write32_as_text(uint32_t v, FILE *f)
++static int write32_as_text(rel_off_t rel, FILE *f)
+ {
++	uint32_t v = (uint32_t) rel;
+ 	return fprintf(f, "\t.long 0x%08"PRIx32"\n", v) > 0 ? 0 : -1;
+ }
+ 
+-static void emit_relocs(int as_text, int use_real_mode)
++static int write64(rel_off_t rel, FILE *f)
++{
++	unsigned char buf[sizeof(uint64_t)];
++	uint64_t v = (uint64_t)rel;
++
++	put_unaligned_le64(v, buf);
++	return fwrite(buf, 1, sizeof(buf), f) == sizeof(buf) ? 0 : -1;
++}
++
++static int write64_as_text(rel_off_t rel, FILE *f)
++{
++	uint64_t v = (uint64_t)rel;
++
++	return fprintf(f, "\t.quad 0x%016"PRIx64"\n", v) > 0 ? 0 : -1;
++}
++
++static void emit_relocs(int as_text, int use_real_mode, int use_large_reloc)
+ {
+ 	int i;
+-	int (*write_reloc)(uint32_t, FILE *) = write32;
++	int (*write_reloc)(rel_off_t rel, FILE *f) = write32;					// could be changed later
+ 	int (*do_reloc)(struct section *sec, Elf_Rel *rel, Elf_Sym *sym,
+ 			const char *symname);
+ 
++	if (use_large_reloc)
++		write_reloc = write64;
++
+ #if ELF_BITS == 64
+ 	if (!use_real_mode)
+ 		do_reloc = do_reloc64;
+@@ -1085,6 +1112,9 @@
+ 		do_reloc = do_reloc32;
+ 	else
+ 		do_reloc = do_reloc_real;
++
++	/* Large relocations only for 64-bit */
++	use_large_reloc = 0;
+ #endif
+ 
+ 	/* Collect up the relocations */
+@@ -1108,8 +1138,13 @@
+ 		 * gas will like.
+ 		 */
+ 		printf(".section \".data.reloc\",\"a\"\n");
+-		printf(".balign 4\n");
+-		write_reloc = write32_as_text;
++		if (use_large_reloc) {
++			printf(".balign 8\n");
++			write_reloc = write64_as_text;
++		} else {
++			printf(".balign 4\n");
++			write_reloc = write32_as_text;
++		}
+ 	}
+ 
+ 	if (use_real_mode) {
+@@ -1177,7 +1212,7 @@
+ 
+ void process(FILE *fp, int use_real_mode, int as_text,
+ 	     int show_absolute_syms, int show_absolute_relocs,
+-	     int show_reloc_info)
++	     int show_reloc_info, int use_large_reloc)
+ {
+ 	regex_init(use_real_mode);
+ 	read_ehdr(fp);
+@@ -1199,5 +1234,5 @@
+ 		print_reloc_info();
+ 		return;
+ 	}
+-	emit_relocs(as_text, use_real_mode);
++	emit_relocs(as_text, use_real_mode, use_large_reloc);
+ }
+diff -Naru a/arch/x86/tools/relocs_common.c b/arch/x86/tools/relocs_common.c
+--- a/arch/x86/tools/relocs_common.c	2024-04-03 17:29:02.560034740 -0400
++++ b/arch/x86/tools/relocs_common.c	2024-04-03 20:29:59.716726365 -0400
+@@ -12,14 +12,14 @@
+ 
+ static void usage(void)
+ {
+-	die("relocs [--abs-syms|--abs-relocs|--reloc-info|--text|--realmode]" \
+-	    " vmlinux\n");
++	die("relocs [--abs-syms|--abs-relocs|--reloc-info|--text|--realmode|" \
++	    "--large-reloc]  vmlinux\n")
+ }
+ 
+ int main(int argc, char **argv)
+ {
+ 	int show_absolute_syms, show_absolute_relocs, show_reloc_info;
+-	int as_text, use_real_mode;
++	int as_text, use_real_mode, use_large_reloc;
+ 	const char *fname;
+ 	FILE *fp;
+ 	int i;
+@@ -30,6 +30,7 @@
+ 	show_reloc_info = 0;
+ 	as_text = 0;
+ 	use_real_mode = 0;
++	use_large_reloc = 0;
+ 	fname = NULL;
+ 	for (i = 1; i < argc; i++) {
+ 		char *arg = argv[i];
+@@ -54,6 +55,10 @@
+ 				use_real_mode = 1;
+ 				continue;
+ 			}
++			if (strcmp(arg, "--large-reloc") == 0) {
++				use_large_reloc = 1;
++				continue;
++			}
+ 		}
+ 		else if (!fname) {
+ 			fname = arg;
+@@ -75,11 +80,11 @@
+ 	if (e_ident[EI_CLASS] == ELFCLASS64)
+ 		process_64(fp, use_real_mode, as_text,
+ 			   show_absolute_syms, show_absolute_relocs,
+-			   show_reloc_info);
++			   show_reloc_info, use_large_reloc);
+ 	else
+ 		process_32(fp, use_real_mode, as_text,
+ 			   show_absolute_syms, show_absolute_relocs,
+-			   show_reloc_info);
++			   show_reloc_info, use_large_reloc);
+ 	fclose(fp);
+ 	return 0;
+ }
+diff -Naru a/arch/x86/tools/relocs.h b/arch/x86/tools/relocs.h
+--- a/arch/x86/tools/relocs.h	2024-04-03 17:29:02.560034740 -0400
++++ b/arch/x86/tools/relocs.h	2024-04-03 20:28:46.796724996 -0400
+@@ -32,8 +32,8 @@
+ 
+ void process_32(FILE *fp, int use_real_mode, int as_text,
+ 		int show_absolute_syms, int show_absolute_relocs,
+-		int show_reloc_info);
++		int show_reloc_info, int use_large_reloc);
+ void process_64(FILE *fp, int use_real_mode, int as_text,
+ 		int show_absolute_syms, int show_absolute_relocs,
+-		int show_reloc_info);
++		int show_reloc_info, int use_large_reloc);
+ #endif /* RELOCS_H */
