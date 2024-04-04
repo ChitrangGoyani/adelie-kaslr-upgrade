@@ -1,0 +1,28 @@
+--- a/include/asm-generic/vmlinux.lds.h	2024-04-03 17:29:03.506701424 -0400
++++ b/include/asm-generic/vmlinux.lds.h	2024-04-03 21:57:27.083367183 -0400
+@@ -448,6 +448,17 @@
+ #endif
+ #endif
+ 
++#ifdef CONFIG_X86_PIE
++#define RO_GOT_X86							\
++	.got        : AT(ADDR(.got) - LOAD_OFFSET) {			\
++		__start_got = .;					\
++		*(.got);						\
++		__end_got = .;						\
++	}
++#else
++#define RO_GOT_X86
++#endif
++
+ /*
+  * Read only Data
+  */
+@@ -480,6 +491,7 @@
+ 	}								\
+ 									\
+ 	FW_LOADER_BUILT_IN_DATA						\
++	RO_GOT_X86						\
+ 	TRACEDATA							\
+ 									\
+ 	PRINTK_INDEX							\
