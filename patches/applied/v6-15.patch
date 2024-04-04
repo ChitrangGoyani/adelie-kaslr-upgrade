@@ -1,0 +1,113 @@
+diff -Narup b/arch/x86/boot/boot.h fresh/arch/x86/boot/boot.h
+--- b/arch/x86/boot/boot.h	2024-04-03 09:32:51.000000000 -0400
++++ fresh/arch/x86/boot/boot.h	2024-04-04 18:24:22.558339407 -0400
+@@ -168,7 +168,7 @@ static inline bool memcmp_gs(const void
+ }
+ 
+ /* Heap -- available for dynamic lists. */
+-extern char _end[];
++extern char _end[] __default_visibility;
+ extern char *HEAP;
+ extern char *heap_end;
+ #define RESET_HEAP() ((void *)( HEAP = _end ))
+diff -Narup b/arch/x86/include/asm/setup.h fresh/arch/x86/include/asm/setup.h
+--- b/arch/x86/include/asm/setup.h	2024-04-03 09:32:51.000000000 -0400
++++ fresh/arch/x86/include/asm/setup.h	2024-04-04 18:24:56.014499657 -0400
+@@ -73,7 +73,7 @@ static inline void x86_ce4100_early_setu
+  * This is set up by the setup-routine at boot-time
+  */
+ extern struct boot_params boot_params;
+-extern char _text[];
++extern char _text[] __default_visibility;
+ 
+ static inline bool kaslr_enabled(void)
+ {
+diff -Narup b/include/asm-generic/sections.h fresh/include/asm-generic/sections.h
+--- b/include/asm-generic/sections.h	2024-04-03 09:32:51.000000000 -0400
++++ fresh/include/asm-generic/sections.h	2024-04-04 18:26:18.330888465 -0400
+@@ -32,6 +32,11 @@
+  *	__softirqentry_text_start, __softirqentry_text_end
+  *	__start_opd, __end_opd
+  */
++ 
++#ifdef CONFIG_DEFAULT_HIDDEN_SYMS
++#pragma GCC visibility push(default)
++#endif
++
+ extern char _text[], _stext[], _etext[];
+ extern char _data[], _sdata[], _edata[];
+ extern char __bss_start[], __bss_stop[];
+@@ -50,6 +55,10 @@ extern char __start_once[], __end_once[]
+ /* Start and end of .ctors section - used for constructor calls. */
+ extern char __ctors_start[], __ctors_end[];
+ 
++#ifdef CONFIG_DEFAULT_HIDDEN_SYMS
++#pragma GCC visibility pop
++#endif
++
+ /* Start and end of .opd section - used for function descriptors. */
+ extern char __start_opd[], __end_opd[];
+ 
+diff -Narup b/include/linux/compiler.h fresh/include/linux/compiler.h
+--- b/include/linux/compiler.h	2024-04-03 09:32:51.000000000 -0400
++++ fresh/include/linux/compiler.h	2024-04-04 18:28:24.359651011 -0400
+@@ -199,6 +199,13 @@ void ftrace_likely_update(struct ftrace_
+ 	__v;								\
+ })
+ 
++#ifdef CONFIG_DEFAULT_HIDDEN_SYMS
++#pragma GCC visibility push(hidden)
++#define __default_visibility  __attribute__((visibility ("default")))
++#else
++#define __default_visibility
++#endif
++
+ #endif /* __KERNEL__ */
+ 
+ /*
+diff -Narup b/init/Kconfig fresh/init/Kconfig
+--- b/init/Kconfig	2024-04-03 09:32:51.000000000 -0400
++++ fresh/init/Kconfig	2024-04-04 18:29:13.915942748 -0400
+@@ -1941,6 +1941,14 @@ config TRACEPOINTS
+ 
+ source "kernel/Kconfig.kexec"
+ 
++#
++# Default to hidden visibility for all symbols.
++# Useful for Position Independent Code to reduce global references.
++#
++config DEFAULT_HIDDEN_SYMS
++	bool
++
++
+ endmenu		# General setup
+ 
+ source "arch/Kconfig"
+diff -Narup b/kernel/trace/trace.h fresh/kernel/trace/trace.h
+--- b/kernel/trace/trace.h	2024-04-03 09:32:51.000000000 -0400
++++ fresh/kernel/trace/trace.h	2024-04-04 18:30:13.748286032 -0400
+@@ -1886,8 +1886,8 @@ extern int tracing_snapshot_cond_enable(
+ extern int tracing_snapshot_cond_disable(struct trace_array *tr);
+ extern void *tracing_cond_snapshot_data(struct trace_array *tr);
+ 
+-extern const char *__start___trace_bprintk_fmt[];
+-extern const char *__stop___trace_bprintk_fmt[];
++extern const char *__start___trace_bprintk_fmt[] __default_visibility;
++extern const char *__stop___trace_bprintk_fmt[] __default_visibility;
+ 
+ extern const char *__start___tracepoint_str[];
+ extern const char *__stop___tracepoint_str[];
+diff -Narup b/lib/dynamic_debug.c fresh/lib/dynamic_debug.c
+--- b/lib/dynamic_debug.c	2024-04-03 09:32:51.000000000 -0400
++++ fresh/lib/dynamic_debug.c	2024-04-04 18:30:58.744538342 -0400
+@@ -39,8 +39,8 @@
+ 
+ #include <rdma/ib_verbs.h>
+ 
+-extern struct _ddebug __start___dyndbg[];
+-extern struct _ddebug __stop___dyndbg[];
++extern struct _ddebug __start___dyndbg[] __default_visibility;
++extern struct _ddebug __stop___dyndbg[] __default_visibility;
+ extern struct ddebug_class_map __start___dyndbg_classes[];
+ extern struct ddebug_class_map __stop___dyndbg_classes[];
+ 
