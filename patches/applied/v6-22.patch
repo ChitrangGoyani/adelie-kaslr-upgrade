@@ -1,0 +1,91 @@
+diff -Narup -W 500 a/arch/x86/include/asm/pgtable_64_types.h b/arch/x86/include/asm/pgtable_64_types.h
+--- a/arch/x86/include/asm/pgtable_64_types.h	2024-04-04 18:14:57.672660586 -0400
++++ b/arch/x86/include/asm/pgtable_64_types.h	2024-04-04 19:10:38.913392207 -0400
+@@ -7,6 +7,7 @@
+ #ifndef __ASSEMBLY__
+ #include <linux/types.h>
+ #include <asm/kaslr.h>
++#include <asm/sections.h>
+ 
+ /*
+  * These are used to make use of C type-checking..
+@@ -187,7 +188,13 @@ extern unsigned int ptrs_per_p4d;
+ #define KMSAN_MODULES_ORIGIN_START	(KMSAN_MODULES_SHADOW_START + MODULES_LEN)
+ #endif /* CONFIG_KMSAN */
+ 
++ 
++#ifdef CONFIG_DYNAMIC_MODULE_BASE
++#define MODULES_VADDR		ALIGN(((unsigned long)_end + PAGE_SIZE), PMD_SIZE)
++#else
+ #define MODULES_VADDR		(__START_KERNEL_map + KERNEL_IMAGE_SIZE)
++#endif
++
+ /* The module sections ends with the start of the fixmap */
+ #ifndef CONFIG_DEBUG_KMAP_LOCAL_FORCE_MAP
+ # define MODULES_END		_AC(0xffffffffff000000, UL)
+diff -Narup -W 500 a/arch/x86/Kconfig b/arch/x86/Kconfig
+--- a/arch/x86/Kconfig	2024-04-04 18:14:57.622660584 -0400
++++ b/arch/x86/Kconfig	2024-04-04 19:10:38.913392207 -0400
+@@ -2259,6 +2259,11 @@ config RANDOMIZE_MEMORY_PHYSICAL_PADDING
+ 
+ 	  If unsure, leave at the default value.
+ 
++# Module section starts just after the end of the kernel module
++config DYNAMIC_MODULE_BASE
++	bool
++
++
+ config ADDRESS_MASKING
+ 	bool "Linear Address Masking support"
+ 	depends on X86_64
+diff -Narup -W 500 a/arch/x86/kernel/head64.c b/arch/x86/kernel/head64.c
+--- a/arch/x86/kernel/head64.c	2024-04-04 18:14:57.702660588 -0400
++++ b/arch/x86/kernel/head64.c	2024-04-04 19:10:38.913392207 -0400
+@@ -476,12 +476,15 @@ asmlinkage __visible void __init __noret
+ 	 * Build-time sanity checks on the kernel image and module
+ 	 * area mappings. (these are purely build-time and produce no code)
+ 	 */
++#ifndef CONFIG_DYNAMIC_MODULE_BASE
+ 	BUILD_BUG_ON(MODULES_VADDR < __START_KERNEL_map);
+ 	BUILD_BUG_ON(MODULES_VADDR - __START_KERNEL_map < KERNEL_IMAGE_SIZE);
+-	BUILD_BUG_ON(MODULES_LEN + KERNEL_IMAGE_SIZE > 2*PUD_SIZE);
++	BUILD_BUG_ON(!IS_ENABLED(CONFIG_RANDOMIZE_BASE_LARGE) &&
++		     MODULES_LEN + KERNEL_IMAGE_SIZE > 2*PUD_SIZE);
+ 	BUILD_BUG_ON((__START_KERNEL_map & ~PMD_MASK) != 0);
+ 	BUILD_BUG_ON((MODULES_VADDR & ~PMD_MASK) != 0);
+ 	BUILD_BUG_ON(!(MODULES_VADDR > __START_KERNEL));
++#endif
+ 	MAYBE_BUILD_BUG_ON(!(((MODULES_END - 1) & PGDIR_MASK) ==
+ 				(__START_KERNEL & PGDIR_MASK)));
+ 	BUILD_BUG_ON(__fix_to_virt(__end_of_fixed_addresses) <= MODULES_END);
+diff -Narup -W 500 a/arch/x86/mm/dump_pagetables.c b/arch/x86/mm/dump_pagetables.c
+--- a/arch/x86/mm/dump_pagetables.c	2024-04-04 18:14:57.732660588 -0400
++++ b/arch/x86/mm/dump_pagetables.c	2024-04-04 19:10:38.916725541 -0400
+@@ -102,7 +102,7 @@ static struct addr_marker address_marker
+ 	[EFI_END_NR]		= { EFI_VA_END,		"EFI Runtime Services" },
+ #endif
+ 	[HIGH_KERNEL_NR]	= { __START_KERNEL_map,	"High Kernel Mapping" },
+-	[MODULES_VADDR_NR]	= { MODULES_VADDR,	"Modules" },
++	[MODULES_VADDR_NR]	= { 0/*MODULES_VADDR*/,	"Modules" },
+ 	[MODULES_END_NR]	= { MODULES_END,	"End Modules" },
+ 	[FIXADDR_START_NR]	= { FIXADDR_START,	"Fixmap Area" },
+ 	[END_OF_SPACE_NR]	= { -1,			NULL }
+@@ -453,6 +453,7 @@ static int __init pt_dump_init(void)
+ 	address_markers[KASAN_SHADOW_START_NR].start_address = KASAN_SHADOW_START;
+ 	address_markers[KASAN_SHADOW_END_NR].start_address = KASAN_SHADOW_END;
+ #endif
++	address_markers[MODULES_VADDR_NR].start_address = MODULES_VADDR;
+ #endif
+ #ifdef CONFIG_X86_32
+ 	address_markers[VMALLOC_START_NR].start_address = VMALLOC_START;
+diff -Narup -W 500 a/Documentation/arch/x86/x86_64/mm.rst b/Documentation/arch/x86/x86_64/mm.rst
+--- a/Documentation/arch/x86/x86_64/mm.rst	2024-04-04 18:14:55.545993843 -0400
++++ b/Documentation/arch/x86/x86_64/mm.rst	2024-04-04 19:12:01.040061840 -0400
+@@ -155,3 +155,6 @@ correct as KASAN disables KASLR.
+ 
+ For both 4- and 5-level layouts, the STACKLEAK_POISON value in the last 2MB
+ hole: ffffffffffff4111
++
++If CONFIG_DYNAMIC_MODULE_BASE is enabled, the module section follows the end of
++the mapped kernel.
+\ No newline at end of file
