@@ -1,0 +1,39 @@
+diff -Narup -W 500 a/arch/x86/boot/compressed/misc.c b/arch/x86/boot/compressed/misc.c
+--- a/arch/x86/boot/compressed/misc.c	2024-04-07 23:21:27.493331304 -0400
++++ b/arch/x86/boot/compressed/misc.c	2024-04-07 23:27:22.736656068 -0400
+@@ -182,10 +182,18 @@ void __puthex(unsigned long value)
+ }
+ 
+ #ifdef CONFIG_X86_NEED_RELOCS
++
++/* Large randomization go lower than -2G and use large relocation table */
++#ifdef CONFIG_RANDOMIZE_BASE_LARGE
++typedef long rel_t;
++#else
++typedef int rel_t;
++#endif
++
+ static void handle_relocations(void *output, unsigned long output_len,
+ 			       unsigned long virt_addr)
+ {
+-	int *reloc;
++	rel_t *reloc;
+ 	unsigned long delta, map, ptr;
+ 	unsigned long min_addr = (unsigned long)output;
+ 	unsigned long max_addr = min_addr + (VO___bss_start - VO__text);
+diff -Narup -W 500 a/arch/x86/Makefile.postlink b/arch/x86/Makefile.postlink
+--- a/arch/x86/Makefile.postlink	2024-04-07 23:21:27.493331304 -0400
++++ b/arch/x86/Makefile.postlink	2024-04-07 23:24:49.413326434 -0400
+@@ -12,7 +12,12 @@ __archpost:
+ -include include/config/auto.conf
+ include $(srctree)/scripts/Kbuild.include
+ 
++# Large randomization require bigger relocation table
++ifeq ($(CONFIG_RANDOMIZE_BASE_LARGE),y)
++CMD_RELOCS = arch/x86/tools/relocs --large-reloc
++else
+ CMD_RELOCS = arch/x86/tools/relocs
++endif
+ OUT_RELOCS = arch/x86/boot/compressed
+ quiet_cmd_relocs = RELOCS  $(OUT_RELOCS)/$@.relocs
+       cmd_relocs = \
