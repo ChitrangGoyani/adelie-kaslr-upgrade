@@ -1,6 +1,6 @@
 diff -Narup -W 500 a/arch/x86/kernel/ftrace.c b/arch/x86/kernel/ftrace.c
---- a/arch/x86/kernel/ftrace.c	2024-04-04 18:14:57.702660588 -0400
-+++ b/arch/x86/kernel/ftrace.c	2024-04-04 19:31:57.826771465 -0400
+--- a/arch/x86/kernel/ftrace.c	2024-04-10 10:48:43.513840179 -0400
++++ b/arch/x86/kernel/ftrace.c	2024-04-10 10:50:48.877175864 -0400
 @@ -124,6 +124,54 @@ ftrace_modify_code_direct(unsigned long
  	return 0;
  }
@@ -24,7 +24,7 @@ diff -Narup -W 500 a/arch/x86/kernel/ftrace.c b/arch/x86/kernel/ftrace.c
 +	ftrace_expected = old_code;
 +
 +	/* Ensure the instructions point to a call to the GOT */
-+	if (probe_kernel_read(replaced, (void *)ip, sizeof(replaced))) {
++	if (copy_from_kernel_nofault(replaced, (void *)ip, sizeof(replaced))) {
 +		WARN_ONCE(1, "invalid function");
 +		return -EFAULT;
 +	}
@@ -43,7 +43,7 @@ diff -Narup -W 500 a/arch/x86/kernel/ftrace.c b/arch/x86/kernel/ftrace.c
 +
 +	ip = text_ip_addr(ip);
 +
-+	if (probe_kernel_write((void *)ip, replaced, sizeof(replaced)))
++	if (copy_to_kernel_nofault((void *)ip, replaced, sizeof(replaced)))
 +		return -EPERM;
 +
 +	sync_core();
@@ -66,8 +66,8 @@ diff -Narup -W 500 a/arch/x86/kernel/ftrace.c b/arch/x86/kernel/ftrace.c
  	/*
  	 * x86 overrides ftrace_replace_code -- this function will never be used
 diff -Narup -W 500 a/scripts/recordmcount.c b/scripts/recordmcount.c
---- a/scripts/recordmcount.c	2024-04-04 18:15:03.392660791 -0400
-+++ b/scripts/recordmcount.c	2024-04-04 19:41:28.226791699 -0400
+--- a/scripts/recordmcount.c	2024-04-10 10:48:47.453840254 -0400
++++ b/scripts/recordmcount.c	2024-04-10 10:49:24.667174284 -0400
 @@ -223,36 +223,12 @@ out:
  }
  
