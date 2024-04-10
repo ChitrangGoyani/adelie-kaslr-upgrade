@@ -141,7 +141,7 @@ diff -Naru a/arch/x86/tools/relocs_common.c b/arch/x86/tools/relocs_common.c
 -	die("relocs [--abs-syms|--abs-relocs|--reloc-info|--text|--realmode]" \
 -	    " vmlinux\n");
 +	die("relocs [--abs-syms|--abs-relocs|--reloc-info|--text|--realmode|" \
-+	    "--large-reloc]  vmlinux\n")
++	    "--large-reloc]  vmlinux\n");
  }
  
  int main(int argc, char **argv)
