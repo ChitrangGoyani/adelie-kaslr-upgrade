@@ -1,7 +1,7 @@
-diff -Narup -W 500 a/arch/x86/boot/compressed/misc.c b/arch/x86/boot/compressed/misc.c
---- a/arch/x86/boot/compressed/misc.c	2024-04-07 23:21:27.493331304 -0400
-+++ b/arch/x86/boot/compressed/misc.c	2024-04-07 23:27:22.736656068 -0400
-@@ -182,10 +182,18 @@ void __puthex(unsigned long value)
+diff -Narup b/arch/x86/boot/compressed/misc.c fresh/arch/x86/boot/compressed/misc.c
+--- b/arch/x86/boot/compressed/misc.c	2024-04-03 09:32:51.000000000 -0400
++++ fresh/arch/x86/boot/compressed/misc.c	2024-04-12 23:31:30.259113392 -0400
+@@ -182,10 +182,19 @@ void __puthex(unsigned long value)
  }
  
  #ifdef CONFIG_X86_NEED_RELOCS
@@ -16,14 +16,80 @@ diff -Narup -W 500 a/arch/x86/boot/compressed/misc.c b/arch/x86/boot/compressed/
  static void handle_relocations(void *output, unsigned long output_len,
  			       unsigned long virt_addr)
  {
--	int *reloc;
+ 	int *reloc;
 +	rel_t *reloc;
  	unsigned long delta, map, ptr;
  	unsigned long min_addr = (unsigned long)output;
  	unsigned long max_addr = min_addr + (VO___bss_start - VO__text);
-diff -Narup -W 500 a/arch/x86/Makefile.postlink b/arch/x86/Makefile.postlink
---- a/arch/x86/Makefile.postlink	2024-04-07 23:21:27.493331304 -0400
-+++ b/arch/x86/Makefile.postlink	2024-04-07 23:24:49.413326434 -0400
+diff -Narup b/arch/x86/include/asm/page_64_types.h fresh/arch/x86/include/asm/page_64_types.h
+--- b/arch/x86/include/asm/page_64_types.h	2024-04-03 09:32:51.000000000 -0400
++++ fresh/arch/x86/include/asm/page_64_types.h	2024-04-13 00:05:48.230405189 -0400
+@@ -47,7 +47,11 @@
+ #define __PAGE_OFFSET           __PAGE_OFFSET_BASE_L4
+ #endif /* CONFIG_DYNAMIC_MEMORY_LAYOUT */
+ 
++#ifdef CONFIG_RANDOMIZE_BASE_LARGE
++#define __START_KERNEL_map	_AC(0xffffffff00000000, UL)
++#else
+ #define __START_KERNEL_map	_AC(0xffffffff80000000, UL)
++#endif /* CONFIG_RANDOMIZE_BASE_LARGE */
+ 
+ /* See Documentation/arch/x86/x86_64/mm.rst for a description of the memory map. */
+ 
+@@ -89,11 +93,18 @@
+  * On KASLR use 1 GiB by default, leaving 1 GiB for modules once the
+  * page tables are fully set up.
+  *
++ * On PIE, we relocate the binary 2G lower so add this extra space.
++ *
+  * If KASLR is disabled we can shrink it to 0.5 GiB and increase the size
+  * of the modules area to 1.5 GiB.
+  */
++
+ #ifdef CONFIG_RANDOMIZE_BASE
++#ifdef CONFIG_RANDOMIZE_BASE_LARGE
++#define KERNEL_IMAGE_SIZE	(_AC(3, UL) * 1024 * 1024 * 1024)
++#else
+ #define KERNEL_IMAGE_SIZE	(1024 * 1024 * 1024)
++#endif
+ #else
+ #define KERNEL_IMAGE_SIZE	(512 * 1024 * 1024)
+ #endif
+diff -Narup b/arch/x86/Kconfig fresh/arch/x86/Kconfig
+--- b/arch/x86/Kconfig	2024-04-03 09:32:51.000000000 -0400
++++ fresh/arch/x86/Kconfig	2024-04-12 23:58:17.859829368 -0400
+@@ -2269,6 +2269,28 @@ config ADDRESS_MASKING
+ 
+ 	  The capability can be used for efficient address sanitizers (ASAN)
+ 	  implementation and for optimizations in JITs.
++	
++config RANDOMIZE_BASE_LARGE
++	bool "Increase the randomization range of the kernel image"
++	depends on X86_64 && RANDOMIZE_BASE
++	select X86_PIE
++	select X86_MODULE_PLTS if MODULES
++	default n
++	help
++	  Build the kernel as a Position Independent Executable (PIE) and
++	  increase the available randomization range from 1GB to 3GB.
++
++	  This option impacts performance on kernel CPU intensive workloads up
++	  to 10% due to PIE generated code. Impact on user-mode processes and
++	  typical usage would be significantly less (0.50% when you build the
++	  kernel).
++
++	  The kernel and modules will generate slightly more assembly (1 to 2%
++	  increase on the .text sections). The vmlinux binary will be
++	  significantly smaller due to fewer relocations.
++
++	  If unsure say N
++
+ 
+ config HOTPLUG_CPU
+ 	def_bool y
+diff -Narup b/arch/x86/Makefile.postlink fresh/arch/x86/Makefile.postlink
+--- b/arch/x86/Makefile.postlink	2024-04-03 09:32:51.000000000 -0400
++++ fresh/arch/x86/Makefile.postlink	2024-04-12 23:40:10.117176585 -0400
 @@ -12,7 +12,12 @@ __archpost:
  -include include/config/auto.conf
  include $(srctree)/scripts/Kbuild.include
