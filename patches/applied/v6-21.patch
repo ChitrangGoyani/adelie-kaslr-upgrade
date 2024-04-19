@@ -1,7 +1,7 @@
 diff -Narup -W 500 a/arch/x86/kernel/ftrace.c b/arch/x86/kernel/ftrace.c
 --- a/arch/x86/kernel/ftrace.c	2024-04-12 23:29:28.916933639 -0400
 +++ b/arch/x86/kernel/ftrace.c	2024-04-12 23:30:39.806936177 -0400
-@@ -124,6 +124,44 @@ ftrace_modify_code_direct(unsigned long
+@@ -124,6 +124,43 @@ ftrace_modify_code_direct(unsigned long
  	return 0;
  }
  
@@ -25,7 +25,6 @@ diff -Narup -W 500 a/arch/x86/kernel/ftrace.c b/arch/x86/kernel/ftrace.c
 +	if (ret)
 +		return ret;	
 +
-+	unsigned char replaced[MCOUNT_INSN_SIZE + 1];
 +	/*
 +	 * Build a nop slide with a 5-byte nop and 1-byte nop to keep the ftrace
 +	 * hooking algorithm working with the expected 5 bytes instruction.
