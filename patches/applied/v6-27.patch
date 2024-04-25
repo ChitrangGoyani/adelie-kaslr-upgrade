@@ -1,7 +1,7 @@
-diff -Narup b/arch/x86/boot/compressed/misc.c fresh/arch/x86/boot/compressed/misc.c
---- b/arch/x86/boot/compressed/misc.c	2024-04-03 09:32:51.000000000 -0400
-+++ fresh/arch/x86/boot/compressed/misc.c	2024-04-12 23:31:30.259113392 -0400
-@@ -182,10 +182,19 @@ void __puthex(unsigned long value)
+diff -Narup -W 500 a/arch/x86/boot/compressed/misc.c b/arch/x86/boot/compressed/misc.c
+--- a/arch/x86/boot/compressed/misc.c	2024-04-25 18:04:31.240296529 -0400
++++ b/arch/x86/boot/compressed/misc.c	2024-04-25 18:06:01.070299746 -0400
+@@ -182,10 +182,18 @@ void __puthex(unsigned long value)
  }
  
  #ifdef CONFIG_X86_NEED_RELOCS
@@ -16,14 +16,14 @@ diff -Narup b/arch/x86/boot/compressed/misc.c fresh/arch/x86/boot/compressed/mis
  static void handle_relocations(void *output, unsigned long output_len,
  			       unsigned long virt_addr)
  {
- 	int *reloc;
+-	int *reloc;
 +	rel_t *reloc;
  	unsigned long delta, map, ptr;
  	unsigned long min_addr = (unsigned long)output;
  	unsigned long max_addr = min_addr + (VO___bss_start - VO__text);
-diff -Narup b/arch/x86/include/asm/page_64_types.h fresh/arch/x86/include/asm/page_64_types.h
---- b/arch/x86/include/asm/page_64_types.h	2024-04-03 09:32:51.000000000 -0400
-+++ fresh/arch/x86/include/asm/page_64_types.h	2024-04-13 00:05:48.230405189 -0400
+diff -Narup -W 500 a/arch/x86/include/asm/page_64_types.h b/arch/x86/include/asm/page_64_types.h
+--- a/arch/x86/include/asm/page_64_types.h	2024-04-25 18:04:31.266963197 -0400
++++ b/arch/x86/include/asm/page_64_types.h	2024-04-25 18:05:01.933630962 -0400
 @@ -47,7 +47,11 @@
  #define __PAGE_OFFSET           __PAGE_OFFSET_BASE_L4
  #endif /* CONFIG_DYNAMIC_MEMORY_LAYOUT */
@@ -55,9 +55,9 @@ diff -Narup b/arch/x86/include/asm/page_64_types.h fresh/arch/x86/include/asm/pa
  #else
  #define KERNEL_IMAGE_SIZE	(512 * 1024 * 1024)
  #endif
-diff -Narup b/arch/x86/Kconfig fresh/arch/x86/Kconfig
---- b/arch/x86/Kconfig	2024-04-03 09:32:51.000000000 -0400
-+++ fresh/arch/x86/Kconfig	2024-04-12 23:58:17.859829368 -0400
+diff -Narup -W 500 a/arch/x86/Kconfig b/arch/x86/Kconfig
+--- a/arch/x86/Kconfig	2024-04-25 18:04:31.236963196 -0400
++++ b/arch/x86/Kconfig	2024-04-25 18:05:01.933630962 -0400
 @@ -2269,6 +2269,28 @@ config ADDRESS_MASKING
  
  	  The capability can be used for efficient address sanitizers (ASAN)
@@ -87,9 +87,9 @@ diff -Narup b/arch/x86/Kconfig fresh/arch/x86/Kconfig
  
  config HOTPLUG_CPU
  	def_bool y
-diff -Narup b/arch/x86/Makefile.postlink fresh/arch/x86/Makefile.postlink
---- b/arch/x86/Makefile.postlink	2024-04-03 09:32:51.000000000 -0400
-+++ fresh/arch/x86/Makefile.postlink	2024-04-12 23:40:10.117176585 -0400
+diff -Narup -W 500 a/arch/x86/Makefile.postlink b/arch/x86/Makefile.postlink
+--- a/arch/x86/Makefile.postlink	2024-04-25 18:04:31.240296529 -0400
++++ b/arch/x86/Makefile.postlink	2024-04-25 18:05:01.933630962 -0400
 @@ -12,7 +12,12 @@ __archpost:
  -include include/config/auto.conf
  include $(srctree)/scripts/Kbuild.include
