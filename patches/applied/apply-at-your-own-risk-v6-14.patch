@@ -1,0 +1,223 @@
+diff -Narup -W 500 a/arch/x86/entry/calling.h b/arch/x86/entry/calling.h
+--- a/arch/x86/entry/calling.h	2024-04-25 18:04:31.250296530 -0400
++++ b/arch/x86/entry/calling.h	2024-04-25 22:52:06.330163097 -0400
+@@ -173,7 +173,7 @@ For 32-bit we have the following convent
+ .endm
+ 
+ #define THIS_CPU_user_pcid_flush_mask   \
+-	PER_CPU_VAR(cpu_tlbstate) + TLB_STATE_user_pcid_flush_mask
++	PER_CPU_VAR(cpu_tlbstate + TLB_STATE_user_pcid_flush_mask)
+ 
+ .macro SWITCH_TO_USER_CR3 scratch_reg:req scratch_reg2:req
+ 	mov	%cr3, \scratch_reg
+diff -Narup -W 500 a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
+--- a/arch/x86/entry/entry_64.S	2024-04-25 18:04:31.250296530 -0400
++++ b/arch/x86/entry/entry_64.S	2024-04-25 22:52:39.953497634 -0400
+@@ -191,7 +191,7 @@ SYM_FUNC_START(__switch_to_asm)
+ 
+ #ifdef CONFIG_STACKPROTECTOR
+ 	movq	TASK_stack_canary(%rsi), %rbx
+-	movq	%rbx, PER_CPU_VAR(fixed_percpu_data) + FIXED_stack_canary
++	movq	%rbx, PER_CPU_VAR(fixed_percpu_data + FIXED_stack_canary)
+ #endif
+ 
+ 	/*
+diff -Narup -W 500 a/arch/x86/include/asm/percpu.h b/arch/x86/include/asm/percpu.h
+--- a/arch/x86/include/asm/percpu.h	2024-04-25 18:04:31.266963197 -0400
++++ b/arch/x86/include/asm/percpu.h	2024-04-25 23:35:53.560039826 -0400
+@@ -4,16 +4,22 @@
+ 
+ #ifdef CONFIG_X86_64
+ #define __percpu_seg		gs
++#define __percpu_rel		(%rip)
+ #else
+ #define __percpu_seg		fs
++#define __percpu_rel
+ #endif
+ 
+ #ifdef __ASSEMBLY__
+ 
+ #ifdef CONFIG_SMP
+-#define PER_CPU_VAR(var)	%__percpu_seg:var
++/* Compatible with Position Independent Code */
++#define PER_CPU_VAR(var)		%__percpu_seg:(var)##__percpu_rel
++/* Rare absolute reference */
++#define PER_CPU_VAR_ABS(var)		%__percpu_seg:var
+ #else /* ! SMP */
+-#define PER_CPU_VAR(var)	var
++#define PER_CPU_VAR(var)	(var)##__percpu_rel
++#define PER_CPU_VAR_ABS(var)	var
+ #endif	/* SMP */
+ 
+ #ifdef CONFIG_X86_64_SMP
+@@ -148,6 +154,7 @@ do {									\
+ 	(typeof(_var))(unsigned long) pfo_val__;			\
+ })
+ 
++/* Position Independent code uses relative addresses only */
+ #define percpu_stable_op(size, op, _var)				\
+ ({									\
+ 	__pcpu_type_##size pfo_val__;					\
+diff -Narup -W 500 a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
+--- a/arch/x86/include/asm/processor.h	2024-04-25 18:04:31.266963197 -0400
++++ b/arch/x86/include/asm/processor.h	2024-04-25 23:10:35.356869480 -0400
+@@ -29,6 +29,7 @@ struct vm86;
+ #include <asm/vmxfeatures.h>
+ #include <asm/vdso/processor.h>
+ #include <asm/shstk.h>
++#include <asm/sections.h>
+ 
+ #include <linux/personality.h>
+ #include <linux/cache.h>
+@@ -411,8 +412,8 @@ DECLARE_INIT_PER_CPU(fixed_percpu_data);
+ 
+ static inline unsigned long cpu_kernelmode_gs_base(int cpu)
+ {
+-	return (unsigned long)per_cpu(fixed_percpu_data.gs_base, cpu);
+-}
++	return (unsigned long)per_cpu(irq_stack_union.gs_base, cpu) -
++		(unsigned long)__per_cpu_start;}
+ 
+ extern asmlinkage void entry_SYSCALL32_ignore(void);
+ 
+diff -Narup -W 500 a/arch/x86/kernel/setup_percpu.c b/arch/x86/kernel/setup_percpu.c
+--- a/arch/x86/kernel/setup_percpu.c	2024-04-25 18:04:31.293629865 -0400
++++ b/arch/x86/kernel/setup_percpu.c	2024-04-25 23:14:52.006878670 -0400
+@@ -23,7 +23,7 @@
+ #include <asm/cpumask.h>
+ #include <asm/cpu.h>
+ 
+-#ifdef CONFIG_X86_64
++#if defined(CONFIG_X86_64) && !defined(CONFIG_X86_PIE)
+ #define BOOT_PERCPU_OFFSET ((unsigned long)__per_cpu_load)
+ #else
+ #define BOOT_PERCPU_OFFSET 0
+@@ -36,6 +36,8 @@ unsigned long __per_cpu_offset[NR_CPUS]
+ 	[0 ... NR_CPUS-1] = BOOT_PERCPU_OFFSET,
+ };
+ EXPORT_SYMBOL(__per_cpu_offset);
++/* Used to calculate gs_base for each CPU */
++EXPORT_SYMBOL(__per_cpu_start);
+ 
+ /*
+  * On x86_64 symbols referenced from code should be reachable using
+diff -Narup -W 500 a/arch/x86/kernel/vmlinux.lds.S b/arch/x86/kernel/vmlinux.lds.S
+--- a/arch/x86/kernel/vmlinux.lds.S	2024-04-25 18:04:31.293629865 -0400
++++ b/arch/x86/kernel/vmlinux.lds.S	2024-04-25 23:17:24.560217467 -0400
+@@ -227,9 +227,14 @@ SECTIONS
+ 	/*
+ 	 * percpu offsets are zero-based on SMP.  PERCPU_VADDR() changes the
+ 	 * output PHDR, so the next output section - .init.text - should
+-	 * start another segment - init.
+-	 */
++	 * start another segment - init. For Position Independent Code, the
++	 * per-cpu section cannot be zero-based because everything is relative.
++ 	 */
++#ifdef CONFIG_X86_PIE
++	PERCPU_SECTION(INTERNODE_CACHE_BYTES)
++#else
+ 	PERCPU_VADDR(INTERNODE_CACHE_BYTES, 0, :percpu)
++#endif
+ 	ASSERT(SIZEOF(.data..percpu) < CONFIG_PHYSICAL_START,
+ 	       "per-CPU data too large - increase CONFIG_PHYSICAL_START")
+ #endif
+@@ -494,12 +499,16 @@ SECTIONS
+  * Per-cpu symbols which need to be offset from __per_cpu_load
+  * for the boot processor.
+  */
++#ifdef CONFIG_X86_PIE
++#define INIT_PER_CPU(x) init_per_cpu__##x = ABSOLUTE(x)
++#else
+ #define INIT_PER_CPU(x) init_per_cpu__##x = ABSOLUTE(x) + __per_cpu_load
++#endif
+ INIT_PER_CPU(gdt_page);
+ INIT_PER_CPU(fixed_percpu_data);
+ INIT_PER_CPU(irq_stack_backing_store);
+ 
+-#ifdef CONFIG_SMP
++#if defined(CONFIG_SMP) && !defined(CONFIG_X86_PIE)
+ . = ASSERT((fixed_percpu_data == 0),
+            "fixed_percpu_data is not at start of per-cpu area");
+ #endif
+diff -Narup -W 500 a/arch/x86/lib/cmpxchg16b_emu.S b/arch/x86/lib/cmpxchg16b_emu.S
+--- a/arch/x86/lib/cmpxchg16b_emu.S	2024-04-25 18:04:31.303629865 -0400
++++ b/arch/x86/lib/cmpxchg16b_emu.S	2024-04-25 23:18:36.023553360 -0400
+@@ -23,14 +23,14 @@ SYM_FUNC_START(this_cpu_cmpxchg16b_emu)
+ 	cli
+ 
+ 	/* if (*ptr == old) */
+-	cmpq	PER_CPU_VAR(0(%rsi)), %rax
++	cmpq	PER_CPU_VAR_ABS(0(%rsi)), %rax
+ 	jne	.Lnot_same
+-	cmpq	PER_CPU_VAR(8(%rsi)), %rdx
++	cmpq	PER_CPU_VAR_ABS(8(%rsi)), %rdx
+ 	jne	.Lnot_same
+ 
+ 	/* *ptr = new */
+-	movq	%rbx, PER_CPU_VAR(0(%rsi))
+-	movq	%rcx, PER_CPU_VAR(8(%rsi))
++	movq	%rbx, PER_CPU_VAR_ABS(0(%rsi))
++	movq	%rcx, PER_CPU_VAR_ABS(8(%rsi))
+ 
+ 	/* set ZF in EFLAGS to indicate success */
+ 	orl	$X86_EFLAGS_ZF, (%rsp)
+diff -Narup -W 500 a/arch/x86/xen/xen-asm.S b/arch/x86/xen/xen-asm.S
+--- a/arch/x86/xen/xen-asm.S	2024-04-25 18:04:31.326963199 -0400
++++ b/arch/x86/xen/xen-asm.S	2024-04-25 23:20:06.166889921 -0400
+@@ -28,7 +28,7 @@
+  * non-zero.
+  */
+ SYM_FUNC_START(xen_irq_disable_direct)
+-	movb $1, PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_mask
++	movb $1, PER_CPU_VAR(xen_vcpu_info + XEN_vcpu_info_mask)
+ 	RET
+ SYM_FUNC_END(xen_irq_disable_direct)
+ 
+@@ -69,7 +69,7 @@ SYM_FUNC_END(check_events)
+ SYM_FUNC_START(xen_irq_enable_direct)
+ 	FRAME_BEGIN
+ 	/* Unmask events */
+-	movb $0, PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_mask
++	movb $0, PER_CPU_VAR(xen_vcpu_info + XEN_vcpu_info_mask)
+ 
+ 	/*
+ 	 * Preempt here doesn't matter because that will deal with any
+@@ -78,7 +78,7 @@ SYM_FUNC_START(xen_irq_enable_direct)
+ 	 */
+ 
+ 	/* Test for pending */
+-	testb $0xff, PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_pending
++	testb $0xff, PER_CPU_VAR(xen_vcpu_info + XEN_vcpu_info_pending)
+ 	jz 1f
+ 
+ 	call check_events
+@@ -97,7 +97,7 @@ SYM_FUNC_END(xen_irq_enable_direct)
+  * x86 use opposite senses (mask vs enable).
+  */
+ SYM_FUNC_START(xen_save_fl_direct)
+-	testb $0xff, PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_mask
++	testb $0xff, PER_CPU_VAR(xen_vcpu_info + XEN_vcpu_info_mask)
+ 	setz %ah
+ 	addb %ah, %ah
+ 	RET
+@@ -113,7 +113,7 @@ SYM_FUNC_END(xen_read_cr2);
+ 
+ SYM_FUNC_START(xen_read_cr2_direct)
+ 	FRAME_BEGIN
+-	_ASM_MOV PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_arch_cr2, %_ASM_AX
++	_ASM_MOV PER_CPU_VAR(xen_vcpu_info + XEN_vcpu_info_arch_cr2), %_ASM_AX
+ 	FRAME_END
+ 	RET
+ SYM_FUNC_END(xen_read_cr2_direct);
+diff -Narup -W 500 a/init/Kconfig b/init/Kconfig
+--- a/init/Kconfig	2024-04-25 18:04:35.090296667 -0400
++++ b/init/Kconfig	2024-04-25 23:20:52.770224924 -0400
+@@ -1789,7 +1789,7 @@ config KALLSYMS_ALL
+ config KALLSYMS_ABSOLUTE_PERCPU
+ 	bool
+ 	depends on KALLSYMS
+-	default X86_64 && SMP
++	default X86_64 && SMP && !X86_PIE
+ 
+ config KALLSYMS_BASE_RELATIVE
+ 	bool
