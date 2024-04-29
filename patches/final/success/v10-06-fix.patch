@@ -1,0 +1,12 @@
+--- a/arch/x86/include/asm/sync_core.h	2024-02-15 16:25:26.086720631 -0500
++++ b/arch/x86/include/asm/sync_core.h	2024-02-15 16:51:33.056720965 -0500
+@@ -31,7 +31,8 @@
+ 		"pushfq\n\t"
+ 		"mov %%cs, %0\n\t"
+ 		"pushq %q0\n\t"
+-		"pushq $1f\n\t"
++		"leaq 1f(%%rip), %q0\n\t"
++		"pushq %q0\n\t"
+ 		"iretq\n\t"
+ 		"1:"
+ 		: "=&r" (tmp), ASM_CALL_CONSTRAINT : : "cc", "memory");

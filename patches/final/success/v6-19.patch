@@ -1,0 +1,18 @@
+diff -Narup -W 500 a/arch/x86/kernel/kvm.c b/arch/x86/kernel/kvm.c
+--- a/arch/x86/kernel/kvm.c	2024-04-26 00:20:18.353422849 -0400
++++ b/arch/x86/kernel/kvm.c	2024-04-26 00:21:50.823424583 -0400
+@@ -800,8 +800,12 @@ extern bool __raw_callee_save___kvm_vcpu
+  * restoring to/from the stack.
+  */
+ #define PV_VCPU_PREEMPTED_ASM						     \
+- "movq   __per_cpu_offset(,%rdi,8), %rax\n\t"				     \
+- "cmpb   $0, " __stringify(KVM_STEAL_TIME_preempted) "+steal_time(%rax)\n\t" \
++ "pushq	%rdi\n\t"																\
++ "leaq	__per_cpu_offset(%rip), %rax\n\t"										\
++ "movq	(%rax,%rdi,8), %rax\n\t"												\
++ "leaq	" __stringify(KVM_STEAL_TIME_preempted) "+steal_time(%rip), %rdi\n\t"	\
++ "cmpb	$0, (%rax,%rdi,1)\n\t"													\
++ "popq	%rdi\n\t"																\
+  "setne  %al\n\t"
+ 
+ DEFINE_ASM_FUNC(__raw_callee_save___kvm_vcpu_is_preempted,

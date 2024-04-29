@@ -1,0 +1,105 @@
+diff -Narup -W 500 a/arch/x86/boot/compressed/misc.c b/arch/x86/boot/compressed/misc.c
+--- a/arch/x86/boot/compressed/misc.c	2024-04-25 18:04:31.240296529 -0400
++++ b/arch/x86/boot/compressed/misc.c	2024-04-25 18:06:01.070299746 -0400
+@@ -182,10 +182,18 @@ void __puthex(unsigned long value)
+ }
+ 
+ #ifdef CONFIG_X86_NEED_RELOCS
++
++/* Large randomization go lower than -2G and use large relocation table */
++#ifdef CONFIG_RANDOMIZE_BASE_LARGE
++typedef long rel_t;
++#else
++typedef int rel_t;
++#endif
++
+ static void handle_relocations(void *output, unsigned long output_len,
+ 			       unsigned long virt_addr)
+ {
+-	int *reloc;
++	rel_t *reloc;
+ 	unsigned long delta, map, ptr;
+ 	unsigned long min_addr = (unsigned long)output;
+ 	unsigned long max_addr = min_addr + (VO___bss_start - VO__text);
+diff -Narup -W 500 a/arch/x86/include/asm/page_64_types.h b/arch/x86/include/asm/page_64_types.h
+--- a/arch/x86/include/asm/page_64_types.h	2024-04-25 18:04:31.266963197 -0400
++++ b/arch/x86/include/asm/page_64_types.h	2024-04-25 18:05:01.933630962 -0400
+@@ -47,7 +47,11 @@
+ #define __PAGE_OFFSET           __PAGE_OFFSET_BASE_L4
+ #endif /* CONFIG_DYNAMIC_MEMORY_LAYOUT */
+ 
++#ifdef CONFIG_RANDOMIZE_BASE_LARGE
++#define __START_KERNEL_map	_AC(0xffffffff00000000, UL)
++#else
+ #define __START_KERNEL_map	_AC(0xffffffff80000000, UL)
++#endif /* CONFIG_RANDOMIZE_BASE_LARGE */
+ 
+ /* See Documentation/arch/x86/x86_64/mm.rst for a description of the memory map. */
+ 
+@@ -89,11 +93,18 @@
+  * On KASLR use 1 GiB by default, leaving 1 GiB for modules once the
+  * page tables are fully set up.
+  *
++ * On PIE, we relocate the binary 2G lower so add this extra space.
++ *
+  * If KASLR is disabled we can shrink it to 0.5 GiB and increase the size
+  * of the modules area to 1.5 GiB.
+  */
++
+ #ifdef CONFIG_RANDOMIZE_BASE
++#ifdef CONFIG_RANDOMIZE_BASE_LARGE
++#define KERNEL_IMAGE_SIZE	(_AC(3, UL) * 1024 * 1024 * 1024)
++#else
+ #define KERNEL_IMAGE_SIZE	(1024 * 1024 * 1024)
++#endif
+ #else
+ #define KERNEL_IMAGE_SIZE	(512 * 1024 * 1024)
+ #endif
+diff -Narup -W 500 a/arch/x86/Kconfig b/arch/x86/Kconfig
+--- a/arch/x86/Kconfig	2024-04-25 18:04:31.236963196 -0400
++++ b/arch/x86/Kconfig	2024-04-25 18:05:01.933630962 -0400
+@@ -2269,6 +2269,28 @@ config ADDRESS_MASKING
+ 
+ 	  The capability can be used for efficient address sanitizers (ASAN)
+ 	  implementation and for optimizations in JITs.
++	
++config RANDOMIZE_BASE_LARGE
++	bool "Increase the randomization range of the kernel image"
++	depends on X86_64 && RANDOMIZE_BASE
++	select X86_PIE
++	select X86_MODULE_PLTS if MODULES
++	default n
++	help
++	  Build the kernel as a Position Independent Executable (PIE) and
++	  increase the available randomization range from 1GB to 3GB.
++
++	  This option impacts performance on kernel CPU intensive workloads up
++	  to 10% due to PIE generated code. Impact on user-mode processes and
++	  typical usage would be significantly less (0.50% when you build the
++	  kernel).
++
++	  The kernel and modules will generate slightly more assembly (1 to 2%
++	  increase on the .text sections). The vmlinux binary will be
++	  significantly smaller due to fewer relocations.
++
++	  If unsure say N
++
+ 
+ config HOTPLUG_CPU
+ 	def_bool y
+diff -Narup -W 500 a/arch/x86/Makefile.postlink b/arch/x86/Makefile.postlink
+--- a/arch/x86/Makefile.postlink	2024-04-25 18:04:31.240296529 -0400
++++ b/arch/x86/Makefile.postlink	2024-04-25 18:05:01.933630962 -0400
+@@ -12,7 +12,12 @@ __archpost:
+ -include include/config/auto.conf
+ include $(srctree)/scripts/Kbuild.include
+ 
++# Large randomization require bigger relocation table
++ifeq ($(CONFIG_RANDOMIZE_BASE_LARGE),y)
++CMD_RELOCS = arch/x86/tools/relocs --large-reloc
++else
+ CMD_RELOCS = arch/x86/tools/relocs
++endif
+ OUT_RELOCS = arch/x86/boot/compressed
+ quiet_cmd_relocs = RELOCS  $(OUT_RELOCS)/$@.relocs
+       cmd_relocs = \

@@ -1,0 +1,38 @@
+diff -Narup b/init/Kconfig fresh/init/Kconfig
+--- b/init/Kconfig	2024-04-03 09:32:51.000000000 -0400
++++ fresh/init/Kconfig	2024-04-04 19:04:04.863503269 -0400
+@@ -1985,6 +1993,13 @@ config ASN1
+ 	  that can be interpreted by the ASN.1 stream decoder and used to
+ 	  inform it as to what tags are to be expected in a stream and what
+ 	  functions to call on what tags.
++	 
++config WEAK_PROVIDE_HIDDEN
++	bool
++	help
++	  Generate linker script PROVIDE_HIDDEN entries for all weak symbols. It
++	  allows to prevent non-PIE code being replaced by the linker if the
++	  emit-relocs option is used instead of PIE (useful for x86_64 PIE).
+ 
+ source "kernel/Kconfig.locks"
+
+diff -Narup b/scripts/link-vmlinux.sh fresh/scripts/link-vmlinux.sh
+--- b/scripts/link-vmlinux.sh	2024-04-03 09:32:51.000000000 -0400
++++ fresh/scripts/link-vmlinux.sh	2024-04-04 19:10:39.022367946 -0400
+@@ -188,6 +188,17 @@ kallsyms_step()
+ 	      -c -o ${kallsymso} ${kallsyms_S}
+ }
+ 
++gen_weak_provide_hidden()
++{
++        if [ -n "${CONFIG_WEAK_PROVIDE_HIDDEN}" ]; then
++                local pattern="s/^\s\+ w \(\w\+\)$/PROVIDE_HIDDEN(\1 = .);/gp"
++                echo -e "SECTIONS {\n. = _end;" > .tmp_vmlinux_hiddenld
++                ${NM} ${1} | sed -n "${pattern}" >> .tmp_vmlinux_hiddenld
++                echo "}" >> .tmp_vmlinux_hiddenld
++                LDFLAGS_vmlinux="${LDFLAGS_vmlinux} -T .tmp_vmlinux_hiddenld"
++        fi
++}
++
+ # Create map file with all symbols from ${1}
+ # See mksymap for additional details
+ mksysmap()
